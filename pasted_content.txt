@@ -1,0 +1,67 @@
+Olá! Sou o seu **Parceiro de Programação**. Que projeto incrível e necessário! Estamos a falar de uma plataforma de monitorização ambiental urbana, o que envolve geolocalização, gestão de dados e uma interface intuitiva para o cidadão e para o governo.
+
+Como estamos a falar de **vibe coding** (onde o foco é a descrição natural e fluida para que a IA gere a estrutura), preparei um contexto robusto e detalhado para obteres o melhor resultado possível.
+
+---
+
+## 📋 Panorama Geral da Solução
+
+O sistema será uma aplicação web full-stack chamada **"EcoMonitor Urbano"**.
+
+* **Front-end:** Uma interface responsiva (funciona em PC e Telemóvel) onde o cidadão pode reportar problemas rapidamente.
+* **Back-end:** Um servidor que processa os relatos, armazena fotos e utiliza um modelo de IA (ou lógica de classificação) para categorizar a ocorrência.
+* **Painel Administrativo:** Um Dashboard visual para órgãos públicos com mapas de calor (Heatmaps) e gráficos de tendências.
+
+---
+
+## 🚀 Contexto para o Prompt (Copiar e Colar)
+
+Podes copiar o texto abaixo e lançar na tua plataforma de vibe coding:
+
+> "Cria uma aplicação web completa chamada 'EcoMonitor Urbano'. O objetivo é permitir que cidadãos registem ocorrências ambientais e que órgãos públicos monitorizem indicadores em tempo real.
+> **Tecnologias sugeridas:** React (Frontend), Node.js (Backend) e uma base de dados que suporte geolocalização (como PostgreSQL com PostGIS ou Firebase).
+> **Módulo do Cidadão:**
+> 1. Interface simples para 'Novo Registo' com upload de imagem.
+> 2. Captura automática ou manual de coordenadas GPS.
+> 3. Categorias: Resíduos Irregulares, Qualidade da Água, Ilhas de Calor, Queimadas e Áreas Verdes.
+> 4. Implementar uma simulação de IA que analise a descrição do utilizador e sugira a classificação do problema.
+> 
+> 
+> **Módulo Administrativo:**
+> 1. Dashboard com contadores (Total de ocorrências, Casos resolvidos).
+> 2. Mapa interativo (Leaflet ou Google Maps) mostrando os pontos das ocorrências.
+> 3. Filtros por data e tipo de problema.
+> 4. Botão para exportar relatórios em PDF e CSV.
+> 
+> 
+> **Estilo Visual:** Design moderno, limpo, usando tons de verde e cinza suave, focado em acessibilidade e usabilidade móvel."
+
+---
+
+## 🛠️ Instruções de Implementação
+
+Para que este código funcione bem, aqui estão os passos que deves seguir após a IA gerar o código:
+
+1. **Configuração do Mapa:** Vais precisar de uma "API Key" (se usares Google Maps) ou configurar o **Leaflet** (que é gratuito e excelente para este caso).
+2. **Armazenamento de Imagens:** Como o projeto prevê upload de fotos, o ideal é usar um serviço como Cloudinary ou AWS S3, mas para um protótipo inicial, o armazenamento local no servidor resolve.
+3. **Lógica da IA:** Para a "Classificação por IA", podes começar com uma função simples de *Keywords* (ex: se a palavra 'lixo' aparecer, classifica como 'Resíduos') ou conectar à API do Gemini/OpenAI para análise de texto.
+
+---
+
+## 📚 Documentação do Segmento de Dados
+
+Aqui está como os dados devem ser estruturados logicamente:
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `id_ocorrencia` | UUID | Identificador único do registo. |
+| `latitude/longitude` | Float | Coordenadas exatas do problema. |
+| `foto_url` | String | Link da imagem armazenada. |
+| `status` | Enum | 'Pendente', 'Em Análise', 'Resolvido'. |
+| `categoria` | String | Tipo do impacto ambiental. |
+
+---
+
+### Próximos Passos
+
+Gostarias que eu escrevesse agora o **código específico da Base de Dados (Schema)** para este projeto ou preferes que eu crie a **interface do Dashboard em React**?
