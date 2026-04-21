@@ -1,4 +1,4 @@
-import type { OccurrenceCategory, OccurrenceStatus, SeverityLevel } from "../drizzle/schema";
+import type { OccurrenceCategory, OccurrenceStatus, SeverityLevel } from "./schema";
 
 export const CATEGORY_LABELS: Record<OccurrenceCategory, string> = {
   air_pollution: "Poluição do Ar",
