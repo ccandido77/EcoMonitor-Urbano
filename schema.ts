@@ -36,6 +36,7 @@ export const OCCURRENCE_CATEGORIES = [
   "soil_contamination",
   "heat_island",
   "flooding",
+  "geoglyph_degradation",
   "other",
 ] as const;
 

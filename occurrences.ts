@@ -9,6 +9,7 @@ export const CATEGORY_LABELS: Record<OccurrenceCategory, string> = {
   soil_contamination: "Contaminação do Solo",
   heat_island: "Ilha de Calor",
   flooding: "Alagamento",
+  geoglyph_degradation: "Degradação de Geoglifos",
   other: "Outro",
 };
 
@@ -21,6 +22,7 @@ export const CATEGORY_COLORS: Record<OccurrenceCategory, string> = {
   soil_contamination: "#a16207",
   heat_island: "#ef4444",
   flooding: "#3b82f6",
+  geoglyph_degradation: "#92400e",
   other: "#6b7280",
 };
 
@@ -33,6 +35,7 @@ export const CATEGORY_ICONS: Record<OccurrenceCategory, string> = {
   soil_contamination: "FlaskConical",
   heat_island: "Thermometer",
   flooding: "Waves",
+  geoglyph_degradation: "Landmark",
   other: "AlertCircle",
 };
 

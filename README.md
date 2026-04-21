@@ -12,8 +12,8 @@ Este documento descreve a especificação técnica e funcional do **EcoMonitor U
 
 O **EcoMonitor Urbano** é uma plataforma web que permite:
 
-- **Cidadãos** registrarem ocorrências ambientais (poluição, resíduos, ruído, desmatamento, etc.) com geolocalização automática, upload de imagens e descrição textual.
-- **Gestores públicos** acompanharem ocorrências em tempo real através de um painel administrativo com dashboard, mapa interativo, filtros avançados e exportação de relatórios.
+- **Cidadãos** registrarem ocorrências ambientais (degradação dos Geoglifos, poluição, resíduos, ruído, desmatamento, etc.) com geolocalização automática, upload de imagens, descrição textual e áudios opicionais.
+- **Gestores IGEOAM** acompanharem ocorrências em tempo real através de um painel administrativo com dashboard, mapa interativo, filtros avançados e exportação de relatórios.
 - **Sistema de IA** classificar automaticamente ocorrências por categoria e nível de gravidade, analisando descrição e imagem.
 - **Armazenamento seguro** de imagens em S3 com URLs públicas referenciadas no banco de dados.
 
@@ -310,12 +310,12 @@ Cidadãos autenticados deverão poder visualizar:
 
 | Regra | Descrição |
 |---|---|
-| **RN01** | Uma ocorrência só pode ser criada se tiver GPS válido (latitude e longitude). |
-| **RN02** | A categoria de uma ocorrência deve ser uma das 9 categorias predefinidas. |
+| **RN01** | Uma ocorrência só pode ser criada se tiver GPS válido (latitude e longitude inseridos automaticamente pelo sistema). |
+| **RN02** | A categoria de uma ocorrência deve ser uma das 10 categorias predefinidas. |
 | **RN03** | O status inicial de uma ocorrência é sempre "pendente". |
 | **RN04** | Apenas admins podem alterar o status de uma ocorrência. |
 | **RN05** | Uma ocorrência resolvida deve ter data de resolução registrada. |
-| **RN06** | A imagem é opcional, mas se fornecida, deve ter máximo 5MB. |
+| **RN06** | A imagem é opcional, mas se fornecida, deve ter máximo 5MB, assim como o áudio. |
 | **RN07** | A descrição deve ter mínimo 10 caracteres. |
 | **RN08** | A classificação por IA é sugestiva; o admin pode sobrescrever. |
 | **RN09** | Cidadãos só podem ver suas próprias ocorrências (exceto em mapa público). |

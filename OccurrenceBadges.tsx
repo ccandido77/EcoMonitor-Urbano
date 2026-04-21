@@ -21,6 +21,7 @@ const categoryVariantMap: Record<OccurrenceCategory, string> = {
   soil_contamination: "bg-yellow-100 text-yellow-800 border-yellow-200",
   heat_island: "bg-red-100 text-red-800 border-red-200",
   flooding: "bg-blue-100 text-blue-800 border-blue-200",
+  geoglyph_degradation: "bg-stone-100 text-stone-800 border-stone-300",
   other: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
