@@ -35,9 +35,24 @@ export const CATEGORY_ICONS: Record<OccurrenceCategory, string> = {
   soil_contamination: "FlaskConical",
   heat_island: "Thermometer",
   flooding: "Waves",
-  geoglyph_degradation: "Landmark",
+  // Ícone custom: octógono + círculo interno + 4 entradas cardinais
+  // Representa as estruturas geométricas pré-colombianas do Acre (geoglifos)
+  // Fonte: Instituto Geoglifos da Amazônia — geoglifosdaamazonia.org.br
+  geoglyph_degradation: "GeoglyphAmazonia",
   other: "AlertCircle",
 };
+
+// SVG path data para o ícone do geoglifo amazônico (24×24 viewBox).
+// Usado em mapas, badges e no formulário de registo.
+export const GEOGLYPH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <polygon points="9,2 15,2 22,9 22,15 15,22 9,22 2,15 2,9"/>
+  <circle cx="12" cy="12" r="4"/>
+  <line x1="12" y1="2"  x2="12" y2="8"/>
+  <line x1="12" y1="16" x2="12" y2="22"/>
+  <line x1="2"  y1="12" x2="8"  y2="12"/>
+  <line x1="16" y1="12" x2="22" y2="12"/>
+  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+</svg>`;
 
 export const STATUS_LABELS: Record<OccurrenceStatus, string> = {
   pending: "Pendente",
