@@ -73,7 +73,7 @@ export default function Home() {
               <Leaf className="h-4 w-4 text-primary-foreground" />
             </div>
             <span className="font-['Plus_Jakarta_Sans',sans-serif] text-lg font-bold text-foreground">
-              EcoMonitor
+              Ecomonitor IGEOAM
             </span>
           </Link>
           <div className="flex items-center gap-3">
@@ -235,7 +235,7 @@ export default function Home() {
             <div className="flex h-6 w-6 items-center justify-center rounded bg-primary">
               <Leaf className="h-3 w-3 text-primary-foreground" />
             </div>
-            <span className="text-sm font-semibold text-foreground">EcoMonitor Urbano</span>
+            <span className="text-sm font-semibold text-foreground">Ecomonitor IGEOAM</span>
           </div>
           <p className="text-xs text-muted-foreground">
             Plataforma colaborativa de monitoramento ambiental urbano

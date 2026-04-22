@@ -81,7 +81,7 @@ export default function AdminExport() {
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text("EcoMonitor Urbano — Relatório de Ocorrências", 14, 13);
+      doc.text("Ecomonitor IGEOAM — Relatório de Ocorrências", 14, 13);
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
       doc.text(`Gerado em: ${data.generatedAt}`, 220, 13);

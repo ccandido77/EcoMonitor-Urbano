@@ -6,7 +6,7 @@ Como estamos a falar de **vibe coding** (onde o foco é a descrição natural e 
 
 ## 📋 Panorama Geral da Solução
 
-O sistema será uma aplicação web full-stack chamada **"EcoMonitor Urbano"**.
+O sistema será uma aplicação web full-stack chamada **"Ecomonitor IGEOAM"**.
 
 * **Front-end:** Uma interface responsiva (funciona em PC e Telemóvel) onde o cidadão pode reportar problemas rapidamente.
 * **Back-end:** Um servidor que processa os relatos, armazena fotos e utiliza um modelo de IA (ou lógica de classificação) para categorizar a ocorrência.
@@ -18,7 +18,7 @@ O sistema será uma aplicação web full-stack chamada **"EcoMonitor Urbano"**.
 
 Podes copiar o texto abaixo e lançar na tua plataforma de vibe coding:
 
-> "Cria uma aplicação web completa chamada 'EcoMonitor Urbano'. O objetivo é permitir que cidadãos registem ocorrências ambientais e que órgãos públicos monitorizem indicadores em tempo real.
+> "Cria uma aplicação web completa chamada 'Ecomonitor IGEOAM'. O objetivo é permitir que cidadãos registem ocorrências ambientais e que órgãos públicos monitorizem indicadores em tempo real.
 > **Tecnologias sugeridas:** React (Frontend), Node.js (Backend) e uma base de dados que suporte geolocalização (como PostgreSQL com PostGIS ou Firebase).
 > **Módulo do Cidadão:**
 > 1. Interface simples para 'Novo Registo' com upload de imagem.

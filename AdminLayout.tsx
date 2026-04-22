@@ -88,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Leaf className="h-4 w-4 text-sidebar-primary-foreground" />
           </div>
           <div>
-            <p className="text-sm font-bold text-sidebar-foreground">EcoMonitor</p>
+            <p className="text-sm font-bold text-sidebar-foreground">Ecomonitor IGEOAM</p>
             <p className="text-xs text-sidebar-foreground/60">Painel Admin</p>
           </div>
         </div>
@@ -156,7 +156,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sidebar-primary">
                   <Leaf className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
                 </div>
-                <span className="text-sm font-bold text-sidebar-foreground">EcoMonitor</span>
+                <span className="text-sm font-bold text-sidebar-foreground">Ecomonitor IGEOAM</span>
               </div>
               <button onClick={() => setMobileOpen(false)} className="text-sidebar-foreground">
                 <X className="h-5 w-5" />

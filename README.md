@@ -1,16 +1,16 @@
-# EcoMonitor Urbano — Plataforma de Monitoramento Ambiental Colaborativo
+# Ecomonitor IGEOAM — Plataforma de Monitoramento Ambiental Colaborativo
 
 ## 1. Introdução
 
 ### 1.1 Objetivo
 
-Este documento descreve a especificação técnica e funcional do **EcoMonitor Urbano**, uma plataforma web de monitoramento ambiental colaborativo. O objetivo é fornecer uma visão completa do sistema, seus requisitos, arquitetura e funcionalidades para desenvolvedores, gestores de projeto, administradores de sistema e stakeholders.
+Este documento descreve a especificação técnica e funcional do **Ecomonitor IGEOAM**, uma plataforma web de monitoramento ambiental colaborativo. O objetivo é fornecer uma visão completa do sistema, seus requisitos, arquitetura e funcionalidades para desenvolvedores, gestores de projeto, administradores de sistema e stakeholders.
 
 **Público-alvo:** Desenvolvedores, arquitetos de software, gestores públicos, cidadãos, analistas de requisitos e equipes de QA.
 
 ### 1.2 Escopo do Sistema
 
-O **EcoMonitor Urbano** é uma plataforma web que permite:
+O **Ecomonitor IGEOAM** é uma plataforma web que permite:
 
 - **Cidadãos** registrarem ocorrências ambientais (degradação dos Geoglifos, poluição, resíduos, ruído, desmatamento, etc.) com geolocalização automática, upload de imagens, descrição textual e áudios opicionais.
 - **Gestores IGEOAM** acompanharem ocorrências em tempo real através de um painel administrativo com dashboard, mapa interativo, filtros avançados e exportação de relatórios.
@@ -57,7 +57,7 @@ O **EcoMonitor Urbano** é uma plataforma web que permite:
 
 ### 2.1 Perspectiva do Produto
 
-O **EcoMonitor Urbano** é uma solução standalone que funciona de forma independente, mas pode integrar-se com:
+O **Ecomonitor IGEOAM** é uma solução standalone que funciona de forma independente, mas pode integrar-se com:
 
 - **Sistemas de gestão municipal** — para sincronizar dados de ocorrências com plataformas de administração pública.
 - **Aplicativos móveis** — através de API REST/tRPC para captura de dados em campo.
@@ -394,7 +394,7 @@ Cidadãos autenticados deverão poder visualizar:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        EcoMonitor Urbano                         │
+│                        Ecomonitor IGEOAM                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  ┌──────────────┐                          ┌──────────────┐    │

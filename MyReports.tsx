@@ -62,7 +62,7 @@ export default function MyReports() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Leaf className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="font-bold text-foreground">EcoMonitor</span>
+            <span className="font-bold text-foreground">Ecomonitor IGEOAM</span>
           </Link>
           <Link href="/report">
             <Button size="sm" className="gap-2">

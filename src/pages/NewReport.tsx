@@ -177,7 +177,7 @@ export default function NewReport() {
   const [messages, setMessages] = useState<Message[]>([{
     id: 1,
     from: 'ai',
-    text: 'Olá! 🌿 Sou o EcoMonitor. Onde está a ocorrer o problema ambiental? Toque em 📍 para enviar a sua localização, ou escreva o endereço/referência.',
+    text: 'Olá! 🌿 Sou o Ecomonitor IGEOAM. Onde está a ocorrer o problema ambiental? Toque em 📍 para enviar a sua localização, ou escreva o endereço/referência.',
   }]);
 
   // Form state
@@ -511,7 +511,7 @@ export default function NewReport() {
         <div className="flex-1 min-w-0">
           <h1 className="font-semibold text-[15px] leading-tight truncate">Novo Relato Ambiental</h1>
           <p className="text-[11px] text-white/60 leading-tight">
-            {step === 'done' ? '✅ Concluído' : 'IA EcoMonitor • em linha'}
+            {step === 'done' ? '✅ Concluído' : 'IA Ecomonitor IGEOAM • em linha'}
           </p>
         </div>
       </div>
@@ -527,7 +527,7 @@ export default function NewReport() {
             {msg.from === 'ai' ? (
               <div className="bg-white rounded-lg rounded-tl-none shadow-sm max-w-[80%] px-3 py-2">
                 <p className="text-sm text-gray-800 leading-relaxed">{msg.text}</p>
-                <span className="text-[10px] text-gray-400 block text-right mt-0.5">EcoMonitor IA</span>
+                <span className="text-[10px] text-gray-400 block text-right mt-0.5">Ecomonitor IGEOAM IA</span>
               </div>
             ) : msg.imagePreview ? (
               <div className="bg-[#dcf8c6] rounded-lg rounded-tr-none shadow-sm overflow-hidden max-w-[220px] border border-green-200">
@@ -665,7 +665,7 @@ export default function NewReport() {
               <button
                 onClick={() => {
                   setStep('location');
-                  setMessages([{ id: Date.now(), from: 'ai', text: 'Olá! 🌿 Sou o EcoMonitor. Onde está a ocorrer o problema ambiental? Toque em 📍 para enviar a sua localização, ou escreva o endereço/referência.' }]);
+                  setMessages([{ id: Date.now(), from: 'ai', text: 'Olá! 🌿 Sou o Ecomonitor IGEOAM. Onde está a ocorrer o problema ambiental? Toque em 📍 para enviar a sua localização, ou escreva o endereço/referência.' }]);
                   setLatitude(null); setLongitude(null); setAddress('');
                   setCategory(null); setDescription(''); setSeverity('medium');
                   setImagePreview(null); setSubmittedId(null);
