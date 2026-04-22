@@ -7,7 +7,7 @@ export const CATEGORY_LABELS: Record<OccurrenceCategory, string> = {
   noise: "Poluição Sonora",
   deforestation: "Desmatamento",
   soil_contamination: "Contaminação do Solo",
-  heat_island: "Ilha de Calor",
+  heat_island: "Queimadas",
   flooding: "Alagamento",
   geoglyph_degradation: "Degradação de Geoglifos",
   other: "Outro",
@@ -44,14 +44,18 @@ export const CATEGORY_ICONS: Record<OccurrenceCategory, string> = {
 
 // SVG path data para o ícone do geoglifo amazônico (24×24 viewBox).
 // Usado em mapas, badges e no formulário de registo.
-export const GEOGLYPH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-  <polygon points="9,2 15,2 22,9 22,15 15,22 9,22 2,15 2,9"/>
-  <circle cx="12" cy="12" r="4"/>
-  <line x1="12" y1="2"  x2="12" y2="8"/>
-  <line x1="12" y1="16" x2="12" y2="22"/>
-  <line x1="2"  y1="12" x2="8"  y2="12"/>
-  <line x1="16" y1="12" x2="22" y2="12"/>
-  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+// Baseado nas formas geométricas do logo do Instituto Geoglifos da Amazônia:
+// cruz + quadrados terminais + rectângulo oco central.
+export const GEOGLYPH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter">
+  <line x1="12" y1="6"  x2="12" y2="9"/>
+  <line x1="12" y1="15" x2="12" y2="18"/>
+  <line x1="6"  y1="12" x2="9"  y2="12"/>
+  <line x1="15" y1="12" x2="18" y2="12"/>
+  <rect x="9" y="9" width="6" height="6"/>
+  <rect x="9.5" y="2"  width="5" height="4" fill="currentColor" stroke="none"/>
+  <rect x="9.5" y="18" width="5" height="4" fill="currentColor" stroke="none"/>
+  <rect x="2"   y="9.5" width="4" height="5" fill="currentColor" stroke="none"/>
+  <rect x="18"  y="9.5" width="4" height="5" fill="currentColor" stroke="none"/>
 </svg>`;
 
 export const STATUS_LABELS: Record<OccurrenceStatus, string> = {
