@@ -8,6 +8,13 @@
       "when": 1776806289650,
       "tag": "0000_uneven_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1776817908322,
+      "tag": "0001_chunky_hitman",
+      "breakpoints": true
     }
   ]
 }

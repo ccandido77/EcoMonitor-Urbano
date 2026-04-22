@@ -64,8 +64,9 @@ export const occurrences = mysqlTable("occurrences", {
   status: mysqlEnum("status", OCCURRENCE_STATUSES).default("pending").notNull(),
 
   // Media
-  imageUrl: text("imageUrl"),
-  imageKey: text("imageKey"),
+  imageUrl: text("imageUrl"), // Caminho da foto no servidor (/uploads/photos/...)
+  imageKey: text("imageKey"), // Mantemos por compatibilidade, mas pode ser nulo
+  audioUrl: text("audioUrl"), // Caminho do áudio no servidor (/uploads/audios/...)
 
   // AI Classification
   aiClassification: json("aiClassification").$type<{

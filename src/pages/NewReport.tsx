@@ -189,6 +189,8 @@ export default function NewReport() {
   const [severity, setSeverity]   = useState<Severity>('medium');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submittedId, setSubmittedId]   = useState<number | null>(null);
+  const [audioBlob, setAudioBlob]       = useState<Blob | null>(null);
+  const [photoFile, setPhotoFile]       = useState<File | null>(null);
 
   // UI state
   const [textInput, setTextInput] = useState('');
@@ -206,7 +208,9 @@ export default function NewReport() {
   const messagesEnd     = useRef<HTMLDivElement>(null);
   const textInputRef    = useRef<HTMLInputElement>(null);
   const recognitionRef  = useRef<SpeechRecognition | null>(null);
-  const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mediaRecorderRef   = useRef<MediaRecorder | null>(null);
+  const audioChunksRef     = useRef<Blob[]>([]);
 
   // Auto-scroll
   useEffect(() => {
@@ -304,39 +308,57 @@ export default function NewReport() {
 
   // ── Audio recording ───────────────────────────────────────────────────────
 
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback(async () => {
+    // MediaRecorder: captura o blob de áudio real
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+        setAudioBlob(blob);
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+    } catch {
+      aiReply('⚠️ Não foi possível aceder ao microfone para gravar áudio.', 0);
+    }
+
+    // SpeechRecognition: transcrição em tempo real (opcional)
     const SR = (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
       .SpeechRecognition ?? (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
 
-    if (!SR) {
-      aiReply('⚠️ Reconhecimento de voz não disponível neste browser. Use Chrome ou Edge para esta funcionalidade.', 0);
-      return;
+    if (SR) {
+      const rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'pt-BR';
+
+      let finalText = '';
+      rec.onresult = (e: SpeechRecognitionEvent) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+          else interim = e.results[i][0].transcript;
+        }
+        setAudioTranscript(finalText + interim);
+      };
+      rec.onerror = () => {
+        setIsRecording(false);
+        clearInterval(timerRef.current!);
+      };
+      rec.onend = () => {
+        setIsRecording(false);
+        clearInterval(timerRef.current!);
+      };
+      recognitionRef.current = rec;
+      rec.start();
     }
-    const rec = new SR();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = 'pt-BR';
 
-    let finalText = '';
-    rec.onresult = (e: SpeechRecognitionEvent) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
-        else interim = e.results[i][0].transcript;
-      }
-      setAudioTranscript(finalText + interim);
-    };
-    rec.onerror = () => {
-      setIsRecording(false);
-      clearInterval(timerRef.current!);
-    };
-    rec.onend = () => {
-      setIsRecording(false);
-      clearInterval(timerRef.current!);
-    };
-
-    recognitionRef.current = rec;
-    rec.start();
     setIsRecording(true);
     setAudioTranscript('');
     setRecordingSecs(0);
@@ -345,6 +367,7 @@ export default function NewReport() {
 
   const stopRecording = useCallback(() => {
     recognitionRef.current?.stop();
+    mediaRecorderRef.current?.stop();
     setIsRecording(false);
     clearInterval(timerRef.current!);
   }, []);
@@ -366,8 +389,10 @@ export default function NewReport() {
 
   const resetAudio = useCallback(() => {
     recognitionRef.current?.stop();
+    mediaRecorderRef.current?.stop();
     setIsRecording(false);
     setAudioTranscript('');
+    setAudioBlob(null);
     setRecordingSecs(0);
     clearInterval(timerRef.current!);
   }, []);
@@ -379,6 +404,7 @@ export default function NewReport() {
       aiReply('⚠️ Imagem grande demais (máx. 5MB). Tente outra foto.', 0);
       return;
     }
+    setPhotoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => {
       const preview = reader.result as string;
@@ -398,6 +424,7 @@ export default function NewReport() {
       aiReply('⚠️ Imagem grande demais (máx. 5MB). Tente outra foto.', 0);
       return;
     }
+    setPhotoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => {
       const preview = reader.result as string;
@@ -433,16 +460,19 @@ export default function NewReport() {
     pushMsg('user', '📤 Enviando ocorrência…');
 
     try {
+      const formData = new FormData();
+      formData.append('latitude', String(latitude));
+      formData.append('longitude', String(longitude));
+      formData.append('address', address || '');
+      formData.append('category', category);
+      formData.append('description', description);
+      formData.append('severity', severity);
+      if (photoFile) formData.append('photo', photoFile);
+      if (audioBlob) formData.append('audio', audioBlob, 'gravacao.ogg');
+
       const res = await fetch('/api/occurrences', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          latitude, longitude,
-          address: address || null,
-          category, description, severity,
-          imageUrl: null, imageKey: null,
-          reporterName: null, reporterEmail: null,
-        }),
+        body: formData,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Erro no servidor');
@@ -455,7 +485,7 @@ export default function NewReport() {
     } finally {
       setLoading(false);
     }
-  }, [latitude, longitude, category, description, severity, address, pushMsg, aiReply]);
+  }, [latitude, longitude, category, description, severity, address, photoFile, audioBlob, pushMsg, aiReply]);
 
   // ── Summary helpers ───────────────────────────────────────────────────────
 
@@ -640,6 +670,7 @@ export default function NewReport() {
                   setCategory(null); setDescription(''); setSeverity('medium');
                   setImagePreview(null); setSubmittedId(null);
                   setAudioTranscript(''); setIsRecording(false);
+                  setAudioBlob(null); setPhotoFile(null);
                 }}
                 className="bg-[#00a884] text-white py-3 rounded-full font-medium shadow-lg text-center active:scale-95 transition-all"
               >

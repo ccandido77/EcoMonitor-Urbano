@@ -1,0 +1,1 @@
+ALTER TABLE `occurrences` ADD `audioUrl` text;
