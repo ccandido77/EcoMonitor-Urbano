@@ -17,6 +17,8 @@ COPY --from=build /app/db.ts ./db.ts
 COPY --from=build /app/schema.ts ./schema.ts
 COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/migrate.ts ./migrate.ts
+COPY --from=build /app/start.sh ./start.sh
+RUN chmod +x ./start.sh
 EXPOSE 3001
 ENV NODE_ENV=production
-CMD ["npx", "tsx", "server/index.ts"]
+CMD ["sh", "start.sh"]
