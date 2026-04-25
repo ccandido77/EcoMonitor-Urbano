@@ -500,7 +500,7 @@ export default function NewReport() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-screen max-h-screen bg-[#efeae2] overflow-hidden">
+    <div className="flex flex-col h-[100dvh] max-h-[100dvh] bg-[#efeae2] overflow-hidden">
 
       {/* Header */}
       <div className="bg-[#075e54] px-4 py-3 flex items-center gap-3 text-white shadow-md flex-shrink-0 z-10">
@@ -510,7 +510,7 @@ export default function NewReport() {
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="font-semibold text-[15px] leading-tight truncate">Novo Relato Ambiental</h1>
-          <p className="text-[11px] text-white/60 leading-tight">
+          <p className="text-xs text-white/60 leading-tight">
             {step === 'done' ? '✅ Concluído' : 'IA Ecomonitor IGEOAM • em linha'}
           </p>
         </div>
@@ -527,19 +527,19 @@ export default function NewReport() {
             {msg.from === 'ai' ? (
               <div className="bg-white rounded-lg rounded-tl-none shadow-sm max-w-[80%] px-3 py-2">
                 <p className="text-sm text-gray-800 leading-relaxed">{msg.text}</p>
-                <span className="text-[10px] text-gray-400 block text-right mt-0.5">Ecomonitor IGEOAM IA</span>
+                <span className="text-xs text-gray-400 block text-right mt-0.5">Ecomonitor IGEOAM IA</span>
               </div>
             ) : msg.imagePreview ? (
               <div className="bg-[#dcf8c6] rounded-lg rounded-tr-none shadow-sm overflow-hidden max-w-[220px] border border-green-200">
                 <img src={msg.imagePreview} alt="Foto" className="w-full h-36 object-cover" />
                 <p className="text-xs px-2 py-1.5 text-gray-700">{msg.text}</p>
-                <span className="text-[10px] text-[#53bdeb] block text-right px-2 pb-1.5">✓✓</span>
+                <span className="text-xs text-[#53bdeb] block text-right px-2 pb-1.5">✓✓</span>
               </div>
             ) : msg.isLocation ? (
               <div className="bg-[#dcf8c6] rounded-lg rounded-tr-none shadow-sm border border-green-200 px-3 py-2 flex items-center gap-2 max-w-[80%]">
                 <span className="text-[#00a884]"><MapPinIcon /></span>
                 <span className="text-sm text-gray-800">{msg.text}</span>
-                <span className="text-[10px] text-[#53bdeb] ml-1">✓✓</span>
+                <span className="text-xs text-[#53bdeb] ml-1">✓✓</span>
               </div>
             ) : msg.isAudio ? (
               <div className="bg-[#dcf8c6] rounded-lg rounded-tr-none shadow-sm border border-green-200 px-3 py-2 max-w-[80%]">
@@ -547,12 +547,12 @@ export default function NewReport() {
                   <span className="text-[#00a884] mt-0.5 flex-shrink-0"><MicIcon /></span>
                   <p className="text-sm text-gray-800 leading-relaxed italic">{msg.text}</p>
                 </div>
-                <span className="text-[10px] text-[#53bdeb] block text-right">✓✓</span>
+                <span className="text-xs text-[#53bdeb] block text-right">✓✓</span>
               </div>
             ) : (
               <div className="bg-[#dcf8c6] rounded-lg rounded-tr-none shadow-sm border border-green-200 px-3 py-2 max-w-[80%]">
                 <p className="text-sm text-gray-800 leading-relaxed">{msg.text}</p>
-                <span className="text-[10px] text-[#53bdeb] block text-right mt-0.5">✓✓</span>
+                <span className="text-xs text-[#53bdeb] block text-right mt-0.5">✓✓</span>
               </div>
             )}
           </div>
@@ -597,7 +597,7 @@ export default function NewReport() {
                 {cat.value === 'geoglyph_degradation'
                   ? <GeoglyphIcon size={28} className="text-stone-700" />
                   : <span className="text-2xl leading-none">{cat.emoji}</span>}
-                <span className="text-[11px] font-medium leading-tight">{cat.label}</span>
+                <span className="text-xs font-medium leading-tight">{cat.label}</span>
               </button>
             ))}
           </div>
@@ -688,26 +688,27 @@ export default function NewReport() {
 
       {/* ── Bottom Input Bar ──────────────────────────────────────────────── */}
       {step !== 'done' && (
-        <div className="bg-[#f0f0f0] px-2 py-2 flex items-center gap-1.5 flex-shrink-0 border-t border-gray-300">
+        <div className="bg-[#f0f0f0] px-2 py-2 flex items-center gap-1.5 flex-shrink-0 border-t border-gray-300"
+             style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
 
           {/* ── Left button ─────────────────────────────────────────────── */}
 
           {/* Description step: mic / stop / re-record */}
           {descDefault && (
             <button onClick={startRecording} title="Gravar áudio"
-              className="p-2.5 rounded-full text-gray-600 hover:bg-gray-200 transition-colors flex-shrink-0">
+              className="p-3 rounded-full text-gray-600 hover:bg-gray-200 transition-colors flex-shrink-0">
               <MicIcon />
             </button>
           )}
           {descRecording && (
             <button onClick={stopRecording} title="Parar gravação"
-              className="p-2.5 rounded-full bg-red-500 text-white shadow-md animate-pulse flex-shrink-0">
+              className="p-3 rounded-full bg-red-500 text-white shadow-md animate-pulse flex-shrink-0">
               <StopIcon />
             </button>
           )}
           {descTranscript && (
             <button onClick={resetAudio} title="Gravar novamente"
-              className="p-2.5 rounded-full text-amber-600 hover:bg-amber-50 transition-colors flex-shrink-0">
+              className="p-3 rounded-full text-amber-600 hover:bg-amber-50 transition-colors flex-shrink-0">
               <RefreshIcon />
             </button>
           )}
@@ -717,7 +718,7 @@ export default function NewReport() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={step !== 'photo'}
-              className={`p-2.5 rounded-full transition-all flex-shrink-0 ${
+              className={`p-3 rounded-full transition-all flex-shrink-0 ${
                 step === 'photo'
                   ? 'text-[#00a884] bg-emerald-50 hover:bg-emerald-100 shadow-sm'
                   : 'text-gray-400 disabled:opacity-30'
@@ -767,7 +768,7 @@ export default function NewReport() {
               onChange={(e) => setTextInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSend(); }}
               placeholder={step === 'location' ? 'Escreva o endereço…' : 'Descreva o problema… (opcional se enviar áudio/foto)'}
-              className="flex-1 bg-white rounded-full px-4 py-2.5 text-sm border border-gray-200 shadow-sm
+              className="flex-1 bg-white rounded-full px-4 py-2.5 text-[16px] border border-gray-200 shadow-sm
                 focus:outline-none focus:ring-2 focus:ring-[#00a884] focus:border-transparent
                 placeholder:text-gray-400"
             />
@@ -801,7 +802,7 @@ export default function NewReport() {
           {/* Description + photo upload button */}
           {descDefault && (
             <button onClick={() => descFileRef.current?.click()} title="Enviar foto como descrição"
-              className="p-2.5 rounded-full text-gray-600 hover:bg-gray-200 transition-colors flex-shrink-0">
+              className="p-3 rounded-full text-gray-600 hover:bg-gray-200 transition-colors flex-shrink-0">
               <CameraIcon />
             </button>
           )}
@@ -809,7 +810,7 @@ export default function NewReport() {
           {/* Transcript confirm button */}
           {descTranscript && (
             <button onClick={confirmAudio} title="Confirmar áudio"
-              className="bg-[#00a884] p-2.5 rounded-full text-white shadow-md active:scale-95 transition-all flex-shrink-0">
+              className="bg-[#00a884] p-3 rounded-full text-white shadow-md active:scale-95 transition-all flex-shrink-0">
               <CheckIcon />
             </button>
           )}
@@ -819,7 +820,7 @@ export default function NewReport() {
             <button
               onClick={handleSend}
               disabled={!textInput.trim() || loading}
-              className="bg-[#00a884] p-2.5 rounded-full text-white shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:bg-gray-400 flex-shrink-0"
+              className="bg-[#00a884] p-3 rounded-full text-white shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:bg-gray-400 flex-shrink-0"
               title="Enviar"
             >
               <SendIcon />
@@ -829,7 +830,7 @@ export default function NewReport() {
           {/* GPS button for location step */}
           {step === 'location' && (
             <button onClick={captureGPS} disabled={gpsLoading} title="Usar GPS"
-              className="p-2.5 rounded-full text-[#00a884] hover:bg-emerald-50 transition-colors flex-shrink-0 disabled:opacity-40">
+              className="p-3 rounded-full text-[#00a884] hover:bg-emerald-50 transition-colors flex-shrink-0 disabled:opacity-40">
               <MapPinIcon />
             </button>
           )}
@@ -844,7 +845,7 @@ export default function NewReport() {
 function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="px-4 py-2.5 flex items-start gap-3">
-      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide w-20 flex-shrink-0 pt-0.5">{label}</span>
+      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide w-20 flex-shrink-0 pt-0.5">{label}</span>
       <span className="text-sm text-gray-700 leading-snug flex-1">{value}</span>
     </div>
   );
