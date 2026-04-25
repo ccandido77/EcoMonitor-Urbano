@@ -10,6 +10,14 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Prevent rubber-band scroll revealing background on iOS */
+  overscroll-behavior: none;
+}
+
+/* Fallback for browsers that don't support dvh */
+#root {
+  height: 100vh;
+  height: 100dvh;
 }
 
 /* WhatsApp-style scrollbar */
