@@ -215,6 +215,7 @@ export default function NewReport() {
   const [audioTranscript, setAudioTranscript] = useState('');
   const [recordingSecs, setRecordingSecs]     = useState(0);
   const [micReconnecting, setMicReconnecting] = useState(false);
+  const [transcriptSaved, setTranscriptSaved] = useState(false);
 
   // Refs
   const fileInputRef    = useRef<HTMLInputElement>(null);  // photo step
@@ -227,7 +228,9 @@ export default function NewReport() {
   const audioChunksRef     = useRef<Blob[]>([]);
   // isRecordingRef espelha isRecording para ser lido dentro de closures do SR sem stale closure
   const isRecordingRef  = useRef(false);
-  const finalTextRef    = useRef(''); // acumula transcrição entre reinícios do SR no Android
+  const finalTextRef    = useRef(''); // acumula resultados isFinal entre reinícios do SR
+  const interimTextRef  = useRef(''); // segmento interim actual — comprometido ao parar
+  const autoConfirmRef  = useRef(false); // onstop deve auto-avançar ao formulário
   const wakeLockRef     = useRef<{ release: () => Promise<void> } | null>(null);
 
   // Auto-scroll
@@ -349,7 +352,6 @@ export default function NewReport() {
   // ── Audio recording ───────────────────────────────────────────────────────
 
   const startRecording = useCallback(async () => {
-    // MediaRecorder: getUserMedia com tratamento seguro de erros
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
     if (!stream) {
       aiReply('⚠️ Não foi possível aceder ao microfone para gravar áudio.', 0);
@@ -365,29 +367,47 @@ export default function NewReport() {
       const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
       setAudioBlob(blob);
       stream.getTracks().forEach(t => t.stop());
+
+      if (!autoConfirmRef.current) return;
+      autoConfirmRef.current = false;
+
+      // Blob pronto — agora é seguro auto-avançar com o texto acumulado
+      const text = finalTextRef.current.trim();
+      if (text.length >= 3) {
+        setDescription(text);
+        const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text;
+        pushMsg('user', `🎤 ${preview}`, { isAudio: true });
+        setAudioTranscript('');
+        setTranscriptSaved(true);
+        setTimeout(() => setTranscriptSaved(false), 2500);
+        aiReply('Áudio transcrito com sucesso! ✅ 📸 Quer adicionar uma foto da situação? (Opcional)');
+        setStep('photo');
+      } else if (blob.size > 1000) {
+        // Áudio gravado mas SR não retornou texto — fallback para digitação manual
+        aiReply('🎤 Áudio gravado! A transcrição automática não obteve resultado. Escreva a descrição abaixo ou tente gravar novamente.', 0);
+      }
     };
     mediaRecorderRef.current = mediaRecorder;
-    // timeslice=1000ms: grava chunks a cada segundo — evita perda total se o Android fechar abruptamente
-    mediaRecorder.start(1000);
+    mediaRecorder.start(1000); // chunk por segundo: evita perda total no Android
 
-    // Wake Lock: impede que o Android suspenda o ecrã e corte o microfone
     if ('wakeLock' in navigator) {
       try {
         wakeLockRef.current = await (navigator as Navigator & {
           wakeLock: { request: (type: string) => Promise<{ release: () => Promise<void> }> };
         }).wakeLock.request('screen');
-      } catch { /* wake lock não é crítico */ }
+      } catch { /* não crítico */ }
     }
 
     isRecordingRef.current = true;
+    autoConfirmRef.current = false;
     finalTextRef.current = '';
+    interimTextRef.current = '';
     setIsRecording(true);
     setMicReconnecting(false);
     setAudioTranscript('');
     setRecordingSecs(0);
     timerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
 
-    // SpeechRecognition com reinício automático — workaround para timeout ~8s do Android
     const SR = (window as typeof window & {
       SpeechRecognition?: typeof SpeechRecognition;
       webkitSpeechRecognition?: typeof SpeechRecognition;
@@ -407,23 +427,33 @@ export default function NewReport() {
         setMicReconnecting(false);
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) finalTextRef.current += e.results[i][0].transcript;
-          else interim = e.results[i][0].transcript;
+          if (e.results[i].isFinal) {
+            finalTextRef.current += e.results[i][0].transcript + ' ';
+            interimTextRef.current = '';
+          } else {
+            interim = e.results[i][0].transcript;
+            interimTextRef.current = interim;
+          }
         }
         setAudioTranscript(finalTextRef.current + interim);
       };
 
       rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-        // 'no-speech' e 'network' são recuperáveis — o onend vai gerir o reinício
         console.warn('[SpeechRecognition] onerror:', e.error, e.message);
       };
 
       rec.onend = () => {
-        console.log('[SpeechRecognition] onend — utilizador ainda a gravar:', isRecordingRef.current);
+        console.log('[SpeechRecognition] onend — isRecordingRef:', isRecordingRef.current);
         if (isRecordingRef.current) {
-          // Android encerrou a sessão prematuramente — reinicia após breve pausa
           setMicReconnecting(true);
           setTimeout(() => { if (isRecordingRef.current) startSR(); }, 300);
+        } else {
+          // Utilizador parou: compromete qualquer interim pendente como texto final
+          if (interimTextRef.current.trim()) {
+            finalTextRef.current = (finalTextRef.current + interimTextRef.current).trim() + ' ';
+            interimTextRef.current = '';
+          }
+          finalTextRef.current = finalTextRef.current.trim();
         }
       };
 
@@ -434,12 +464,20 @@ export default function NewReport() {
     };
 
     startSR();
-  }, [aiReply]);
+  }, [aiReply, pushMsg]);
 
   const stopRecording = useCallback(() => {
-    isRecordingRef.current = false; // sinaliza ao onend que não deve reiniciar
+    isRecordingRef.current = false; // onend não deve reiniciar o SR
+
+    // Compromete qualquer interim pendente antes de parar o SR
+    if (interimTextRef.current.trim()) {
+      finalTextRef.current = (finalTextRef.current + interimTextRef.current).trim() + ' ';
+      interimTextRef.current = '';
+    }
+
+    autoConfirmRef.current = true; // onstop vai auto-avançar se houver texto
     recognitionRef.current?.stop();
-    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current?.stop(); // dispara onstop → gera blob → auto-confirm
     setIsRecording(false);
     setMicReconnecting(false);
     clearInterval(timerRef.current!);
@@ -448,22 +486,28 @@ export default function NewReport() {
   }, []);
 
   const confirmAudio = useCallback(() => {
-    const text = audioTranscript.trim();
+    // Usa finalTextRef como fonte de verdade — o estado audioTranscript pode estar stale no Android
+    const text = (finalTextRef.current.trim() || audioTranscript.trim());
     if (text.length < 3) {
       aiReply('⚠️ Transcrição muito curta. Tente gravar novamente ou escreva a descrição.', 0);
       setAudioTranscript('');
+      finalTextRef.current = '';
       return;
     }
     setDescription(text);
     const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text;
     pushMsg('user', `🎤 ${preview}`, { isAudio: true });
     setAudioTranscript('');
+    finalTextRef.current = '';
     aiReply('Áudio transcrito com sucesso! ✅ 📸 Quer adicionar uma foto da situação? (Opcional)');
     setStep('photo');
   }, [audioTranscript, pushMsg, aiReply]);
 
   const resetAudio = useCallback(() => {
     isRecordingRef.current = false;
+    autoConfirmRef.current = false;
+    interimTextRef.current = '';
+    finalTextRef.current = '';
     recognitionRef.current?.stop();
     mediaRecorderRef.current?.stop();
     setIsRecording(false);
@@ -645,6 +689,15 @@ export default function NewReport() {
               <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
               <span className="ml-2 text-xs text-gray-500">A obter GPS…</span>
+            </div>
+          </div>
+        )}
+
+        {/* Toast: texto processado */}
+        {transcriptSaved && (
+          <div className="flex justify-center">
+            <div className="bg-[#075e54] text-white text-xs font-medium px-4 py-1.5 rounded-full shadow-md animate-pulse">
+              ✅ Texto processado
             </div>
           </div>
         )}
