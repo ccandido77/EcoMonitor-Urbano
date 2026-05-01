@@ -136,6 +136,17 @@ function RefreshIcon() {
   );
 }
 
+function SpinnerIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+      className="animate-spin" style={{ transformOrigin: 'center' }}>
+      <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" />
+    </svg>
+  );
+}
+
 // Ícone baseado nas formas geométricas do logo do Instituto Geoglifos da Amazônia:
 // cruz com quadrados terminais em cada extremidade + rectângulo oco central.
 function GeoglyphIcon({ size = 28, className = '' }: { size?: number; className?: string }) {
@@ -253,18 +264,32 @@ export default function NewReport() {
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLatitude(pos.coords.latitude);
-        setLongitude(pos.coords.longitude);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setLatitude(lat);
+        setLongitude(lng);
         setGpsLoading(false);
+        console.log('[GPS] Coords obtidas:', lat, lng);
         pushMsg('user', '📍 Localização GPS enviada', { isLocation: true });
         aiReply('Localização recebida! ✅ Agora, qual é o tipo de ocorrência? Selecione uma categoria:');
         setStep('category');
       },
-      () => {
+      (error) => {
         setGpsLoading(false);
-        aiReply('⚠️ Não consegui aceder ao GPS. Pode escrever o endereço ou referência local.', 0);
+        console.log('[GPS Error] código:', error.code, '| mensagem:', error.message);
+        let msg: string;
+        if (error.code === 1) {
+          msg = '⚠️ Permissão de localização negada. Active o GPS nas definições do dispositivo e tente novamente.';
+        } else if (error.code === 2) {
+          msg = '⚠️ Sinal de GPS fraco ou indisponível. Tente ao ar livre ou escreva o endereço manualmente.';
+        } else if (error.code === 3) {
+          msg = '⚠️ Tempo de resposta do GPS excedido. Verifique o sinal e tente novamente.';
+        } else {
+          msg = '⚠️ Não foi possível aceder ao GPS. Pode escrever o endereço ou referência local.';
+        }
+        aiReply(msg, 0);
       },
-      { enableHighAccuracy: true, timeout: 12000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, [pushMsg, aiReply]);
 
@@ -693,6 +718,22 @@ export default function NewReport() {
 
           {/* ── Left button ─────────────────────────────────────────────── */}
 
+          {/* Location step: GPS button on the left — keeps all 3 elements visible */}
+          {step === 'location' && (
+            <button
+              onClick={captureGPS}
+              disabled={gpsLoading}
+              title={gpsLoading ? 'A obter GPS…' : 'Usar localização GPS'}
+              className={`p-3 rounded-full transition-all flex-shrink-0 ${
+                gpsLoading
+                  ? 'text-[#00a884] opacity-60'
+                  : 'text-[#00a884] hover:bg-emerald-50 active:bg-emerald-100'
+              }`}
+            >
+              {gpsLoading ? <SpinnerIcon /> : <MapPinIcon />}
+            </button>
+          )}
+
           {/* Description step: mic / stop / re-record */}
           {descDefault && (
             <button onClick={startRecording} title="Gravar áudio"
@@ -713,8 +754,8 @@ export default function NewReport() {
             </button>
           )}
 
-          {/* Other steps: camera */}
-          {!descDefault && !descRecording && !descTranscript && (
+          {/* Other steps (not location, not description): camera */}
+          {step !== 'location' && !descDefault && !descRecording && !descTranscript && (
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={step !== 'photo'}
@@ -768,7 +809,7 @@ export default function NewReport() {
               onChange={(e) => setTextInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSend(); }}
               placeholder={step === 'location' ? 'Escreva o endereço…' : 'Descreva o problema… (opcional se enviar áudio/foto)'}
-              className="flex-1 bg-white rounded-full px-4 py-2.5 text-[16px] border border-gray-200 shadow-sm
+              className="flex-1 min-w-0 bg-white rounded-full px-4 py-2.5 text-[16px] border border-gray-200 shadow-sm
                 focus:outline-none focus:ring-2 focus:ring-[#00a884] focus:border-transparent
                 placeholder:text-gray-400"
             />
@@ -827,13 +868,6 @@ export default function NewReport() {
             </button>
           )}
 
-          {/* GPS button for location step */}
-          {step === 'location' && (
-            <button onClick={captureGPS} disabled={gpsLoading} title="Usar GPS"
-              className="p-3 rounded-full text-[#00a884] hover:bg-emerald-50 transition-colors flex-shrink-0 disabled:opacity-40">
-              <MapPinIcon />
-            </button>
-          )}
         </div>
       )}
     </div>

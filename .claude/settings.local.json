@@ -6,7 +6,10 @@
       "PowerShell(Get-Item \"c:\\\\Users\\\\Candido\\\\Documents\\\\GitHub\\\\EcoMonitor-Urbano\\\\db.ts\" | Select-Object Length, LastWriteTime; [System.IO.File]::ReadAllBytes\\(\"c:\\\\Users\\\\Candido\\\\Documents\\\\GitHub\\\\EcoMonitor-Urbano\\\\db.ts\"\\).Count)",
       "Bash(xxd \"c:/Users/Candido/Documents/GitHub/EcoMonitor-Urbano/db.ts\")",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(npm run *)"
     ]
   }
 }
