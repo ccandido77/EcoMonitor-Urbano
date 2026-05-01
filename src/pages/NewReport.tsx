@@ -226,12 +226,16 @@ export default function NewReport() {
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaRecorderRef   = useRef<MediaRecorder | null>(null);
   const audioChunksRef     = useRef<Blob[]>([]);
-  // isRecordingRef espelha isRecording para ser lido dentro de closures do SR sem stale closure
   const isRecordingRef  = useRef(false);
-  const finalTextRef    = useRef(''); // acumula resultados isFinal entre reinícios do SR
-  const interimTextRef  = useRef(''); // segmento interim actual — comprometido ao parar
-  const autoConfirmRef  = useRef(false); // onstop deve auto-avançar ao formulário
+  const finalTextRef    = useRef('');
+  const interimTextRef  = useRef('');
+  const autoConfirmRef  = useRef(false);
   const wakeLockRef     = useRef<{ release: () => Promise<void> } | null>(null);
+  // Dois gates: o confirm só dispara quando blob E SR estiverem prontos
+  const blobReadyRef    = useRef(false);
+  const srEndedRef      = useRef(false);
+  const audioBlobRef    = useRef<Blob | null>(null);
+  const srSafetyRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-scroll
   useEffect(() => {
@@ -351,44 +355,66 @@ export default function NewReport() {
 
   // ── Audio recording ───────────────────────────────────────────────────────
 
+  // Só avança quando AMBOS os gates estiverem fechados: blob pronto + SR terminado
+  const tryAutoConfirm = useCallback(() => {
+    if (!autoConfirmRef.current) return;
+    if (!blobReadyRef.current || !srEndedRef.current) return;
+    autoConfirmRef.current = false;
+    blobReadyRef.current = false;
+    srEndedRef.current = false;
+    if (srSafetyRef.current) { clearTimeout(srSafetyRef.current); srSafetyRef.current = null; }
+
+    const text = finalTextRef.current.trim();
+    if (text.length >= 3) {
+      setDescription(text);
+      const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text;
+      pushMsg('user', `🎤 ${preview}`, { isAudio: true });
+      setAudioTranscript('');
+      finalTextRef.current = '';
+      setTranscriptSaved(true);
+      setTimeout(() => setTranscriptSaved(false), 2500);
+      aiReply('Áudio transcrito com sucesso! ✅ 📸 Quer adicionar uma foto da situação? (Opcional)');
+      setStep('photo');
+    } else if (audioBlobRef.current && audioBlobRef.current.size > 1000) {
+      aiReply('🎤 Áudio gravado! A transcrição automática não obteve resultado. Pode escrever a descrição abaixo ou tentar gravar novamente.', 0);
+    }
+  }, [aiReply, pushMsg]);
+
   const startRecording = useCallback(async () => {
+    // Detecta MIME type suportado — Android Chrome usa webm, não ogg
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+      .find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
     if (!stream) {
       aiReply('⚠️ Não foi possível aceder ao microfone para gravar áudio.', 0);
       return;
     }
 
-    const mediaRecorder = new MediaRecorder(stream);
+    // Reset dos gates para esta sessão
+    blobReadyRef.current = false;
+    srEndedRef.current = false;
+    audioBlobRef.current = null;
+
+    const mediaRecorder = mimeType
+      ? new MediaRecorder(stream, { mimeType })
+      : new MediaRecorder(stream);
+
     audioChunksRef.current = [];
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) audioChunksRef.current.push(e.data);
     };
     mediaRecorder.onstop = () => {
-      const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+      const blob = new Blob(audioChunksRef.current, mimeType ? { type: mimeType } : undefined);
+      audioBlobRef.current = blob;
       setAudioBlob(blob);
       stream.getTracks().forEach(t => t.stop());
-
-      if (!autoConfirmRef.current) return;
-      autoConfirmRef.current = false;
-
-      // Blob pronto — agora é seguro auto-avançar com o texto acumulado
-      const text = finalTextRef.current.trim();
-      if (text.length >= 3) {
-        setDescription(text);
-        const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text;
-        pushMsg('user', `🎤 ${preview}`, { isAudio: true });
-        setAudioTranscript('');
-        setTranscriptSaved(true);
-        setTimeout(() => setTranscriptSaved(false), 2500);
-        aiReply('Áudio transcrito com sucesso! ✅ 📸 Quer adicionar uma foto da situação? (Opcional)');
-        setStep('photo');
-      } else if (blob.size > 1000) {
-        // Áudio gravado mas SR não retornou texto — fallback para digitação manual
-        aiReply('🎤 Áudio gravado! A transcrição automática não obteve resultado. Escreva a descrição abaixo ou tente gravar novamente.', 0);
-      }
+      // Gate 1 fechado: blob pronto
+      blobReadyRef.current = true;
+      tryAutoConfirm();
     };
     mediaRecorderRef.current = mediaRecorder;
-    mediaRecorder.start(1000); // chunk por segundo: evita perda total no Android
+    mediaRecorder.start(1000);
 
     if ('wakeLock' in navigator) {
       try {
@@ -415,7 +441,10 @@ export default function NewReport() {
       webkitSpeechRecognition?: typeof SpeechRecognition;
     }).webkitSpeechRecognition;
 
-    if (!SR) return;
+    if (!SR) {
+      srEndedRef.current = true; // SR indisponível — gate já aberto
+      return;
+    }
 
     const startSR = () => {
       const rec = new SR();
@@ -439,54 +468,74 @@ export default function NewReport() {
       };
 
       rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-        console.warn('[SpeechRecognition] onerror:', e.error, e.message);
+        console.warn('[SR] onerror:', e.error, e.message);
       };
 
       rec.onend = () => {
-        console.log('[SpeechRecognition] onend — isRecordingRef:', isRecordingRef.current);
+        console.log('[SR] onend — isRecordingRef:', isRecordingRef.current);
         if (isRecordingRef.current) {
+          // Android encerrou prematuramente — reinicia
           setMicReconnecting(true);
           setTimeout(() => { if (isRecordingRef.current) startSR(); }, 300);
         } else {
-          // Utilizador parou: compromete qualquer interim pendente como texto final
+          // Utilizador parou: compromete interim pendente
           if (interimTextRef.current.trim()) {
             finalTextRef.current = (finalTextRef.current + interimTextRef.current).trim() + ' ';
             interimTextRef.current = '';
           }
           finalTextRef.current = finalTextRef.current.trim();
+          // Gate 2 fechado: SR terminou
+          srEndedRef.current = true;
+          tryAutoConfirm();
         }
       };
 
       recognitionRef.current = rec;
-      try { rec.start(); } catch (err) {
-        console.warn('[SpeechRecognition] start() falhou:', err);
+      try {
+        rec.start();
+      } catch (err) {
+        console.warn('[SR] start() falhou:', err);
+        srEndedRef.current = true; // SR falhou ao iniciar — gate já aberto
+        tryAutoConfirm();
       }
     };
 
     startSR();
-  }, [aiReply, pushMsg]);
+  }, [aiReply, tryAutoConfirm]);
 
   const stopRecording = useCallback(() => {
-    isRecordingRef.current = false; // onend não deve reiniciar o SR
+    isRecordingRef.current = false;
 
-    // Compromete qualquer interim pendente antes de parar o SR
+    // Compromete interim pendente antes de parar o SR
     if (interimTextRef.current.trim()) {
       finalTextRef.current = (finalTextRef.current + interimTextRef.current).trim() + ' ';
       interimTextRef.current = '';
     }
 
-    autoConfirmRef.current = true; // onstop vai auto-avançar se houver texto
-    recognitionRef.current?.stop();
-    mediaRecorderRef.current?.stop(); // dispara onstop → gera blob → auto-confirm
+    autoConfirmRef.current = true;
+
+    // Safety timeout: se o SR não disparar onend em 2s, força o gate
+    if (srSafetyRef.current) clearTimeout(srSafetyRef.current);
+    srSafetyRef.current = setTimeout(() => {
+      if (!srEndedRef.current) {
+        console.warn('[SR] onend timeout — forçando gate');
+        srEndedRef.current = true;
+        tryAutoConfirm();
+      }
+      srSafetyRef.current = null;
+    }, 2000);
+
+    recognitionRef.current?.stop(); // → onend fecha o gate SR
+    mediaRecorderRef.current?.stop(); // → onstop fecha o gate blob
     setIsRecording(false);
     setMicReconnecting(false);
     clearInterval(timerRef.current!);
     wakeLockRef.current?.release().catch(() => {});
     wakeLockRef.current = null;
-  }, []);
+  }, [tryAutoConfirm]);
 
+  // Fallback manual: usado se o utilizador carregar no ✓ em vez de esperar o auto-confirm
   const confirmAudio = useCallback(() => {
-    // Usa finalTextRef como fonte de verdade — o estado audioTranscript pode estar stale no Android
     const text = (finalTextRef.current.trim() || audioTranscript.trim());
     if (text.length < 3) {
       aiReply('⚠️ Transcrição muito curta. Tente gravar novamente ou escreva a descrição.', 0);
@@ -508,6 +557,10 @@ export default function NewReport() {
     autoConfirmRef.current = false;
     interimTextRef.current = '';
     finalTextRef.current = '';
+    blobReadyRef.current = false;
+    srEndedRef.current = false;
+    audioBlobRef.current = null;
+    if (srSafetyRef.current) { clearTimeout(srSafetyRef.current); srSafetyRef.current = null; }
     recognitionRef.current?.stop();
     mediaRecorderRef.current?.stop();
     setIsRecording(false);
