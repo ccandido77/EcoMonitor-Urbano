@@ -67,6 +67,37 @@ function fmtSecs(s: number) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// MIME universal — Chrome Android exige webm/opus, Safari iOS prefere mp4
+function getPreferredAudioMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+    'audio/mp4',
+  ];
+  return candidates.find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+}
+
+function audioFileExtension(mime: string): string {
+  if (mime.includes('webm')) return 'webm';
+  if (mime.includes('ogg'))  return 'ogg';
+  if (mime.includes('mp4'))  return 'm4a';
+  return 'bin';
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function makeDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 function CameraIcon() {
@@ -229,13 +260,13 @@ export default function NewReport() {
   const isRecordingRef  = useRef(false);
   const finalTextRef    = useRef('');
   const interimTextRef  = useRef('');
-  const autoConfirmRef  = useRef(false);
   const wakeLockRef     = useRef<{ release: () => Promise<void> } | null>(null);
-  // Dois gates: o confirm só dispara quando blob E SR estiverem prontos
-  const blobReadyRef    = useRef(false);
-  const srEndedRef      = useRef(false);
-  const audioBlobRef    = useRef<Blob | null>(null);
-  const srSafetyRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Sincronização por Promessa: cada sessão tem deferreds para blob + transcrição
+  const audioMimeRef    = useRef<string>('');
+  const blobDeferredRef = useRef<Deferred<Blob | null> | null>(null);
+  const srDeferredRef   = useRef<Deferred<string> | null>(null);
+  // Ponte para finalizeAudioSession invocar submitOccurrence sem ordering issues
+  const submitFnRef     = useRef<((o?: { description?: string; audioBlob?: Blob }) => Promise<void>) | null>(null);
 
   // Auto-scroll
   useEffect(() => {
@@ -355,35 +386,60 @@ export default function NewReport() {
 
   // ── Audio recording ───────────────────────────────────────────────────────
 
-  // Só avança quando AMBOS os gates estiverem fechados: blob pronto + SR terminado
-  const tryAutoConfirm = useCallback(() => {
-    if (!autoConfirmRef.current) return;
-    if (!blobReadyRef.current || !srEndedRef.current) return;
-    autoConfirmRef.current = false;
-    blobReadyRef.current = false;
-    srEndedRef.current = false;
-    if (srSafetyRef.current) { clearTimeout(srSafetyRef.current); srSafetyRef.current = null; }
+  // Aguarda blob + transcrição via Promise.allSettled (com safety timeout
+  // de 2s) e injeta tudo no estado. Estilo "send audio" do WhatsApp:
+  // assim que validado, o handleSubmit é chamado automaticamente.
+  const finalizeAudioSession = useCallback(async () => {
+    const blobDef = blobDeferredRef.current;
+    const srDef   = srDeferredRef.current;
+    if (!blobDef || !srDef) return;
+    blobDeferredRef.current = null;
+    srDeferredRef.current   = null;
 
-    const text = finalTextRef.current.trim();
-    if (text.length >= 3) {
-      setDescription(text);
-      const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text;
-      pushMsg('user', `🎤 ${preview}`, { isAudio: true });
-      setAudioTranscript('');
-      finalTextRef.current = '';
-      setTranscriptSaved(true);
-      setTimeout(() => setTranscriptSaved(false), 2500);
-      aiReply('Áudio transcrito com sucesso! ✅ 📸 Quer adicionar uma foto da situação? (Opcional)');
-      setStep('photo');
-    } else if (audioBlobRef.current && audioBlobRef.current.size > 1000) {
-      aiReply('🎤 Áudio gravado! A transcrição automática não obteve resultado. Pode escrever a descrição abaixo ou tentar gravar novamente.', 0);
+    // Race do SR contra safety timeout — usa o que houver acumulado se nada vier
+    const srWithTimeout = Promise.race([
+      srDef.promise,
+      new Promise<string>((resolve) => setTimeout(() => {
+        const fallback = (finalTextRef.current + ' ' + interimTextRef.current).trim();
+        resolve(fallback);
+      }, 2000)),
+    ]);
+
+    const [blobResult, srResult] = await Promise.allSettled([blobDef.promise, srWithTimeout]);
+    const blob = blobResult.status === 'fulfilled' ? blobResult.value : null;
+    let text   = srResult.status === 'fulfilled' ? srResult.value : '';
+
+    // Recuperação Android: se isFinal nunca disparou, usa o último interim
+    if (!text && interimTextRef.current.trim()) text = interimTextRef.current.trim();
+    text = text.trim();
+
+    if (!blob || blob.size === 0) {
+      aiReply('⚠️ Falha ao capturar o áudio. Tente gravar novamente.', 0);
+      return;
     }
+
+    if (text.length < 3) {
+      aiReply('🎤 Áudio gravado, mas a transcrição automática não retornou texto. Pode escrever a descrição abaixo.', 0);
+      return;
+    }
+
+    setDescription(text);
+    setAudioTranscript('');
+    finalTextRef.current   = '';
+    interimTextRef.current = '';
+    const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text;
+    pushMsg('user', `🎤 ${preview}`, { isAudio: true });
+    setTranscriptSaved(true);
+    setTimeout(() => setTranscriptSaved(false), 2500);
+
+    // Persistência imediata: submete já com os valores frescos sem esperar pelo render
+    await submitFnRef.current?.({ description: text, audioBlob: blob });
   }, [aiReply, pushMsg]);
 
   const startRecording = useCallback(async () => {
-    // Detecta MIME type suportado — Android Chrome usa webm, não ogg
-    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
-      .find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+    // MIME universal — garante que o Blob herda o codec real
+    const mimeType = getPreferredAudioMimeType();
+    audioMimeRef.current = mimeType;
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
     if (!stream) {
@@ -391,10 +447,11 @@ export default function NewReport() {
       return;
     }
 
-    // Reset dos gates para esta sessão
-    blobReadyRef.current = false;
-    srEndedRef.current = false;
-    audioBlobRef.current = null;
+    // Deferreds desta sessão — finalize aguarda ambos via Promise.allSettled
+    const blobDef = makeDeferred<Blob | null>();
+    const srDef   = makeDeferred<string>();
+    blobDeferredRef.current = blobDef;
+    srDeferredRef.current   = srDef;
 
     const mediaRecorder = mimeType
       ? new MediaRecorder(stream, { mimeType })
@@ -406,12 +463,13 @@ export default function NewReport() {
     };
     mediaRecorder.onstop = () => {
       const blob = new Blob(audioChunksRef.current, mimeType ? { type: mimeType } : undefined);
-      audioBlobRef.current = blob;
       setAudioBlob(blob);
       stream.getTracks().forEach(t => t.stop());
-      // Gate 1 fechado: blob pronto
-      blobReadyRef.current = true;
-      tryAutoConfirm();
+      blobDef.resolve(blob.size > 0 ? blob : null);
+    };
+    mediaRecorder.onerror = (e: Event) => {
+      console.warn('[MediaRecorder] error:', e);
+      blobDef.resolve(null);
     };
     mediaRecorderRef.current = mediaRecorder;
     mediaRecorder.start(1000);
@@ -425,8 +483,7 @@ export default function NewReport() {
     }
 
     isRecordingRef.current = true;
-    autoConfirmRef.current = false;
-    finalTextRef.current = '';
+    finalTextRef.current   = '';
     interimTextRef.current = '';
     setIsRecording(true);
     setMicReconnecting(false);
@@ -442,15 +499,15 @@ export default function NewReport() {
     }).webkitSpeechRecognition;
 
     if (!SR) {
-      srEndedRef.current = true; // SR indisponível — gate já aberto
+      srDef.resolve(''); // sem SR: resolve já para o finalize não bloquear
       return;
     }
 
     const startSR = () => {
       const rec = new SR();
-      rec.continuous = true;
+      rec.continuous     = true;
       rec.interimResults = true;
-      rec.lang = 'pt-BR';
+      rec.lang           = 'pt-BR';
 
       rec.onresult = (e: SpeechRecognitionEvent) => {
         setMicReconnecting(false);
@@ -473,21 +530,18 @@ export default function NewReport() {
 
       rec.onend = () => {
         console.log('[SR] onend — isRecordingRef:', isRecordingRef.current);
+        // Resiliência Android: SR encerra prematuramente — reinicia se ainda estiver a gravar
         if (isRecordingRef.current) {
-          // Android encerrou prematuramente — reinicia
           setMicReconnecting(true);
           setTimeout(() => { if (isRecordingRef.current) startSR(); }, 300);
-        } else {
-          // Utilizador parou: compromete interim pendente
-          if (interimTextRef.current.trim()) {
-            finalTextRef.current = (finalTextRef.current + interimTextRef.current).trim() + ' ';
-            interimTextRef.current = '';
-          }
-          finalTextRef.current = finalTextRef.current.trim();
-          // Gate 2 fechado: SR terminou
-          srEndedRef.current = true;
-          tryAutoConfirm();
+          return;
         }
+        // Utilizador parou: compromete interim pendente como fallback final
+        if (interimTextRef.current.trim()) {
+          finalTextRef.current = (finalTextRef.current + interimTextRef.current).trim() + ' ';
+          interimTextRef.current = '';
+        }
+        srDef.resolve(finalTextRef.current.trim());
       };
 
       recognitionRef.current = rec;
@@ -495,44 +549,33 @@ export default function NewReport() {
         rec.start();
       } catch (err) {
         console.warn('[SR] start() falhou:', err);
-        srEndedRef.current = true; // SR falhou ao iniciar — gate já aberto
-        tryAutoConfirm();
+        srDef.resolve(finalTextRef.current.trim());
       }
     };
 
     startSR();
-  }, [aiReply, tryAutoConfirm]);
+  }, [aiReply]);
 
   const stopRecording = useCallback(() => {
     isRecordingRef.current = false;
 
-    // Compromete interim pendente antes de parar o SR
+    // Compromete interim pendente antes de parar — recuperação Android
     if (interimTextRef.current.trim()) {
       finalTextRef.current = (finalTextRef.current + interimTextRef.current).trim() + ' ';
       interimTextRef.current = '';
     }
 
-    autoConfirmRef.current = true;
-
-    // Safety timeout: se o SR não disparar onend em 2s, força o gate
-    if (srSafetyRef.current) clearTimeout(srSafetyRef.current);
-    srSafetyRef.current = setTimeout(() => {
-      if (!srEndedRef.current) {
-        console.warn('[SR] onend timeout — forçando gate');
-        srEndedRef.current = true;
-        tryAutoConfirm();
-      }
-      srSafetyRef.current = null;
-    }, 2000);
-
-    recognitionRef.current?.stop(); // → onend fecha o gate SR
-    mediaRecorderRef.current?.stop(); // → onstop fecha o gate blob
+    recognitionRef.current?.stop();   // dispara SR.onend → resolve srDef
+    mediaRecorderRef.current?.stop(); // dispara MR.onstop → resolve blobDef
     setIsRecording(false);
     setMicReconnecting(false);
-    clearInterval(timerRef.current!);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     wakeLockRef.current?.release().catch(() => {});
     wakeLockRef.current = null;
-  }, [tryAutoConfirm]);
+
+    // O finalize aguarda ambos os Deferreds (Promise.allSettled + safety timeout)
+    void finalizeAudioSession();
+  }, [finalizeAudioSession]);
 
   // Fallback manual: usado se o utilizador carregar no ✓ em vez de esperar o auto-confirm
   const confirmAudio = useCallback(() => {
@@ -554,13 +597,13 @@ export default function NewReport() {
 
   const resetAudio = useCallback(() => {
     isRecordingRef.current = false;
-    autoConfirmRef.current = false;
     interimTextRef.current = '';
-    finalTextRef.current = '';
-    blobReadyRef.current = false;
-    srEndedRef.current = false;
-    audioBlobRef.current = null;
-    if (srSafetyRef.current) { clearTimeout(srSafetyRef.current); srSafetyRef.current = null; }
+    finalTextRef.current   = '';
+    // Resolve deferreds pendentes para não vazar um finalize anterior
+    blobDeferredRef.current?.resolve(null);
+    srDeferredRef.current?.resolve('');
+    blobDeferredRef.current = null;
+    srDeferredRef.current   = null;
     recognitionRef.current?.stop();
     mediaRecorderRef.current?.stop();
     setIsRecording(false);
@@ -568,7 +611,7 @@ export default function NewReport() {
     setAudioTranscript('');
     setAudioBlob(null);
     setRecordingSecs(0);
-    clearInterval(timerRef.current!);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     wakeLockRef.current?.release().catch(() => {});
     wakeLockRef.current = null;
   }, []);
@@ -630,8 +673,11 @@ export default function NewReport() {
 
   // ── Submit → MySQL ────────────────────────────────────────────────────────
 
-  const handleSubmit = useCallback(async () => {
-    if (!latitude || !longitude || !category || !description) return;
+  const submitOccurrence = useCallback(async (overrides?: { description?: string; audioBlob?: Blob }) => {
+    const desc = (overrides?.description ?? description).trim();
+    const blob = overrides?.audioBlob ?? audioBlob;
+
+    if (!latitude || !longitude || !category || !desc) return;
     setLoading(true);
     pushMsg('user', '📤 Enviando ocorrência…');
 
@@ -641,15 +687,15 @@ export default function NewReport() {
       formData.append('longitude', String(longitude));
       formData.append('address', address || '');
       formData.append('category', category);
-      formData.append('description', description);
+      formData.append('description', desc);
       formData.append('severity', severity);
       if (photoFile) formData.append('photo', photoFile);
-      if (audioBlob) formData.append('audio', audioBlob, 'gravacao.ogg');
+      if (blob) {
+        const ext = audioFileExtension(audioMimeRef.current);
+        formData.append('audio', blob, `gravacao.${ext}`);
+      }
 
-      const res = await fetch('/api/occurrences', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch('/api/occurrences', { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Erro no servidor');
       setSubmittedId(data.occurrence?.id ?? null);
@@ -662,6 +708,11 @@ export default function NewReport() {
       setLoading(false);
     }
   }, [latitude, longitude, category, description, severity, address, photoFile, audioBlob, pushMsg, aiReply]);
+
+  // Mantém o ref atualizado para o finalizeAudioSession poder invocar sem ordering issues
+  useEffect(() => { submitFnRef.current = submitOccurrence; }, [submitOccurrence]);
+
+  const handleSubmit = useCallback(() => submitOccurrence(), [submitOccurrence]);
 
   // ── Summary helpers ───────────────────────────────────────────────────────
 
