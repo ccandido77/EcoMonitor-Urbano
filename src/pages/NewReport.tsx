@@ -61,6 +61,8 @@ const SEVERITIES: { value: Severity; label: string; dot: string; color: string }
   { value: 'critical', label: 'Crítica', dot: 'bg-red-600',     color: 'bg-red-50 border-red-400 text-red-800' },
 ];
 
+const MAX_RECORDING_SECS = 300; // 5 minutos — limite de segurança
+
 function fmtSecs(s: number) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
@@ -209,9 +211,10 @@ export default function NewReport() {
   const [gpsLoading, setGpsLoading] = useState(false);
 
   // Audio recording state
-  const [isRecording, setIsRecording]     = useState(false);
+  const [isRecording, setIsRecording]         = useState(false);
   const [audioTranscript, setAudioTranscript] = useState('');
-  const [recordingSecs, setRecordingSecs] = useState(0);
+  const [recordingSecs, setRecordingSecs]     = useState(0);
+  const [micReconnecting, setMicReconnecting] = useState(false);
 
   // Refs
   const fileInputRef    = useRef<HTMLInputElement>(null);  // photo step
@@ -222,6 +225,10 @@ export default function NewReport() {
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaRecorderRef   = useRef<MediaRecorder | null>(null);
   const audioChunksRef     = useRef<Blob[]>([]);
+  // isRecordingRef espelha isRecording para ser lido dentro de closures do SR sem stale closure
+  const isRecordingRef  = useRef(false);
+  const finalTextRef    = useRef(''); // acumula transcrição entre reinícios do SR no Android
+  const wakeLockRef     = useRef<{ release: () => Promise<void> } | null>(null);
 
   // Auto-scroll
   useEffect(() => {
@@ -243,6 +250,14 @@ export default function NewReport() {
       setTimeout(() => textInputRef.current?.focus(), 300);
     }
   }, [step]);
+
+  // Auto-stop ao atingir o limite máximo de gravação
+  useEffect(() => {
+    if (recordingSecs >= MAX_RECORDING_SECS && isRecording) {
+      stopRecording();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingSecs]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -334,67 +349,102 @@ export default function NewReport() {
   // ── Audio recording ───────────────────────────────────────────────────────
 
   const startRecording = useCallback(async () => {
-    // MediaRecorder: captura o blob de áudio real
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
-        setAudioBlob(blob);
-        stream.getTracks().forEach(t => t.stop());
-      };
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-    } catch {
+    // MediaRecorder: getUserMedia com tratamento seguro de erros
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+    if (!stream) {
       aiReply('⚠️ Não foi possível aceder ao microfone para gravar áudio.', 0);
+      return;
     }
 
-    // SpeechRecognition: transcrição em tempo real (opcional)
-    const SR = (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
-      .SpeechRecognition ?? (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+    const mediaRecorder = new MediaRecorder(stream);
+    audioChunksRef.current = [];
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+      setAudioBlob(blob);
+      stream.getTracks().forEach(t => t.stop());
+    };
+    mediaRecorderRef.current = mediaRecorder;
+    // timeslice=1000ms: grava chunks a cada segundo — evita perda total se o Android fechar abruptamente
+    mediaRecorder.start(1000);
 
-    if (SR) {
+    // Wake Lock: impede que o Android suspenda o ecrã e corte o microfone
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await (navigator as Navigator & {
+          wakeLock: { request: (type: string) => Promise<{ release: () => Promise<void> }> };
+        }).wakeLock.request('screen');
+      } catch { /* wake lock não é crítico */ }
+    }
+
+    isRecordingRef.current = true;
+    finalTextRef.current = '';
+    setIsRecording(true);
+    setMicReconnecting(false);
+    setAudioTranscript('');
+    setRecordingSecs(0);
+    timerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
+
+    // SpeechRecognition com reinício automático — workaround para timeout ~8s do Android
+    const SR = (window as typeof window & {
+      SpeechRecognition?: typeof SpeechRecognition;
+      webkitSpeechRecognition?: typeof SpeechRecognition;
+    }).SpeechRecognition ?? (window as typeof window & {
+      webkitSpeechRecognition?: typeof SpeechRecognition;
+    }).webkitSpeechRecognition;
+
+    if (!SR) return;
+
+    const startSR = () => {
       const rec = new SR();
       rec.continuous = true;
       rec.interimResults = true;
       rec.lang = 'pt-BR';
 
-      let finalText = '';
       rec.onresult = (e: SpeechRecognitionEvent) => {
+        setMicReconnecting(false);
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalTextRef.current += e.results[i][0].transcript;
           else interim = e.results[i][0].transcript;
         }
-        setAudioTranscript(finalText + interim);
+        setAudioTranscript(finalTextRef.current + interim);
       };
-      rec.onerror = () => {
-        setIsRecording(false);
-        clearInterval(timerRef.current!);
-      };
-      rec.onend = () => {
-        setIsRecording(false);
-        clearInterval(timerRef.current!);
-      };
-      recognitionRef.current = rec;
-      rec.start();
-    }
 
-    setIsRecording(true);
-    setAudioTranscript('');
-    setRecordingSecs(0);
-    timerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
+      rec.onerror = (e: SpeechRecognitionErrorEvent) => {
+        // 'no-speech' e 'network' são recuperáveis — o onend vai gerir o reinício
+        console.warn('[SpeechRecognition] onerror:', e.error, e.message);
+      };
+
+      rec.onend = () => {
+        console.log('[SpeechRecognition] onend — utilizador ainda a gravar:', isRecordingRef.current);
+        if (isRecordingRef.current) {
+          // Android encerrou a sessão prematuramente — reinicia após breve pausa
+          setMicReconnecting(true);
+          setTimeout(() => { if (isRecordingRef.current) startSR(); }, 300);
+        }
+      };
+
+      recognitionRef.current = rec;
+      try { rec.start(); } catch (err) {
+        console.warn('[SpeechRecognition] start() falhou:', err);
+      }
+    };
+
+    startSR();
   }, [aiReply]);
 
   const stopRecording = useCallback(() => {
+    isRecordingRef.current = false; // sinaliza ao onend que não deve reiniciar
     recognitionRef.current?.stop();
     mediaRecorderRef.current?.stop();
     setIsRecording(false);
+    setMicReconnecting(false);
     clearInterval(timerRef.current!);
+    wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
   }, []);
 
   const confirmAudio = useCallback(() => {
@@ -413,13 +463,17 @@ export default function NewReport() {
   }, [audioTranscript, pushMsg, aiReply]);
 
   const resetAudio = useCallback(() => {
+    isRecordingRef.current = false;
     recognitionRef.current?.stop();
     mediaRecorderRef.current?.stop();
     setIsRecording(false);
+    setMicReconnecting(false);
     setAudioTranscript('');
     setAudioBlob(null);
     setRecordingSecs(0);
     clearInterval(timerRef.current!);
+    wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
   }, []);
 
   // ── Photo as description (skips dedicated photo step) ────────────────────
@@ -598,10 +652,18 @@ export default function NewReport() {
         {/* Live recording indicator in chat */}
         {descRecording && (
           <div className="flex justify-center">
-            <div className="bg-white rounded-full px-4 py-2 shadow-sm border border-red-200 flex items-center gap-2.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-              <span className="text-sm font-semibold text-red-500">{fmtSecs(recordingSecs)}</span>
-              {audioTranscript && (
+            <div className={`bg-white rounded-full px-4 py-2 shadow-sm flex items-center gap-2.5 transition-colors ${
+              micReconnecting ? 'border border-amber-400' : 'border border-red-200'
+            }`}>
+              <span className={`w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0 ${
+                micReconnecting ? 'bg-amber-400' : 'bg-red-500'
+              }`} />
+              <span className={`text-sm font-semibold ${micReconnecting ? 'text-amber-600' : 'text-red-500'}`}>
+                {fmtSecs(recordingSecs)}
+              </span>
+              {micReconnecting ? (
+                <span className="text-xs text-amber-600 font-medium">⚡ Reconectando mic…</span>
+              ) : audioTranscript && (
                 <span className="text-xs text-gray-500 italic max-w-[200px] truncate">
                   "{audioTranscript}"
                 </span>
@@ -782,10 +844,14 @@ export default function NewReport() {
 
           {/* Recording: live transcript preview */}
           {descRecording && (
-            <div className="flex-1 bg-white rounded-full px-3 py-2.5 flex items-center gap-2 shadow-sm border border-red-200 min-w-0">
-              <span className="text-xs font-mono text-red-500 flex-shrink-0">{fmtSecs(recordingSecs)}</span>
+            <div className={`flex-1 bg-white rounded-full px-3 py-2.5 flex items-center gap-2 shadow-sm min-w-0 transition-colors ${
+              micReconnecting ? 'border border-amber-300' : 'border border-red-200'
+            }`}>
+              <span className={`text-xs font-mono flex-shrink-0 ${micReconnecting ? 'text-amber-600' : 'text-red-500'}`}>
+                {fmtSecs(recordingSecs)}
+              </span>
               <span className="text-xs text-gray-500 italic truncate flex-1">
-                {audioTranscript || 'A ouvir…'}
+                {micReconnecting ? '⚡ Reconectando mic…' : (audioTranscript || 'A ouvir…')}
               </span>
             </div>
           )}
